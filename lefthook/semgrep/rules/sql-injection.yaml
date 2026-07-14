@@ -1,0 +1,66 @@
+# =============================================================================
+# Semgrep Custom Rules - SQL Injection Prevention
+# Untuk Java/Spring Boot projects
+# =============================================================================
+rules:
+  # ---------------------------------------------------------------------------
+  # SQL Injection via String Concatenation
+  # ---------------------------------------------------------------------------
+  - id: java-sql-injection-string-concat
+    patterns:
+      - pattern-either:
+          - pattern: |
+              String $QUERY = $PREFIX + $INPUT + ...;
+              ...
+              $STMT.executeQuery($QUERY);
+          - pattern: |
+              String $QUERY = String.format("...", $INPUT, ...);
+              ...
+              $STMT.executeQuery($QUERY);
+          - pattern: |
+              $STMT.executeQuery($PREFIX + $INPUT + ...);
+    message: >
+      Potential SQL injection via string concatenation.
+      Gunakan PreparedStatement dengan parameterized queries.
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+      impact: HIGH
+
+  # ---------------------------------------------------------------------------
+  # Raw Native Query tanpa parameterized
+  # ---------------------------------------------------------------------------
+  - id: java-spring-raw-native-query
+    patterns:
+      - pattern: |
+          @Query(value = $QUERY + $VAR, nativeQuery = true)
+    message: >
+      Native query menggunakan string concatenation. Gunakan named parameters (:param)
+      atau positional parameters (?1) untuk mencegah SQL injection.
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"
+
+  # ---------------------------------------------------------------------------
+  # JPA createQuery with concatenation
+  # ---------------------------------------------------------------------------
+  - id: java-jpa-query-concat
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $EM.createQuery($PREFIX + $INPUT + ...);
+          - pattern: |
+              $EM.createNativeQuery($PREFIX + $INPUT + ...);
+    message: >
+      JPA query menggunakan string concatenation. Gunakan parameter binding
+      dengan setParameter() untuk mencegah injection.
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-89"
+      owasp: "A03:2021 - Injection"

@@ -1,0 +1,113 @@
+# =============================================================================
+# Semgrep Custom Rules - Spring Boot Security Best Practices
+# =============================================================================
+rules:
+  # ---------------------------------------------------------------------------
+  # Unrestricted CORS
+  # ---------------------------------------------------------------------------
+  - id: spring-cors-allow-all
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $CONFIG.allowedOrigins("*")
+          - pattern: |
+              @CrossOrigin(origins = "*")
+          - pattern: |
+              .allowedOrigins("*")
+    message: >
+      CORS dikonfigurasi untuk mengizinkan semua origins.
+      Batasi ke domain yang diizinkan saja untuk production.
+    severity: WARNING
+    languages: [java]
+    metadata:
+      cwe: "CWE-942"
+      owasp: "A05:2021 - Security Misconfiguration"
+
+  # ---------------------------------------------------------------------------
+  # Disabled CSRF Protection
+  # ---------------------------------------------------------------------------
+  - id: spring-csrf-disabled
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $HTTP.csrf($CSRF -> $CSRF.disable())
+          - pattern: |
+              $HTTP.csrf().disable()
+    message: >
+      CSRF protection di-disable. Pastikan ini intentional
+      (misal: stateless API dengan JWT). Tambahkan comment justifikasi.
+    severity: WARNING
+    languages: [java]
+    metadata:
+      cwe: "CWE-352"
+      owasp: "A01:2021 - Broken Access Control"
+
+  # ---------------------------------------------------------------------------
+  # Sensitive data di log
+  # ---------------------------------------------------------------------------
+  - id: java-sensitive-data-logging
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $LOG.info("..." + $PASSWORD + "...");
+          - pattern: |
+              $LOG.debug("..." + $TOKEN + "...");
+          - pattern: |
+              $LOG.info(..., $PASSWORD, ...);
+          - pattern: |
+              System.out.println($PASSWORD);
+      - metavariable-regex:
+          metavariable: $PASSWORD
+          regex: "(?i).*(password|token|secret|credential|ssn).*"
+    message: >
+      Data sensitif mungkin ter-log. Jangan log password, token, atau secrets.
+      Gunakan masking atau hapus dari log statement.
+    severity: ERROR
+    languages: [java]
+    metadata:
+      cwe: "CWE-532"
+      owasp: "A09:2021 - Security Logging and Monitoring Failures"
+
+  # ---------------------------------------------------------------------------
+  # Exception message exposed ke client
+  # ---------------------------------------------------------------------------
+  - id: spring-exception-info-leak
+    patterns:
+      - pattern-either:
+          - pattern: |
+              return ResponseEntity.status(...).body($EX.getMessage());
+          - pattern: |
+              return ResponseEntity.badRequest().body($EX.getMessage());
+          - pattern: |
+              return $EX.getStackTrace();
+    message: >
+      Exception details di-expose ke client. Ini bisa membocorkan internal info.
+      Gunakan generic error message dan log detail secara internal.
+    severity: WARNING
+    languages: [java]
+    metadata:
+      cwe: "CWE-209"
+      owasp: "A04:2021 - Insecure Design"
+
+  # ---------------------------------------------------------------------------
+  # Missing input validation
+  # ---------------------------------------------------------------------------
+  - id: spring-missing-validation
+    patterns:
+      - pattern: |
+          @PostMapping(...)
+          public $RET $METHOD(@RequestBody $TYPE $BODY) { ... }
+      - pattern-not: |
+          @PostMapping(...)
+          public $RET $METHOD(@Valid @RequestBody $TYPE $BODY) { ... }
+      - pattern-not: |
+          @PostMapping(...)
+          public $RET $METHOD(@Validated @RequestBody $TYPE $BODY) { ... }
+    message: >
+      Request body tidak di-validate. Tambahkan @Valid atau @Validated
+      untuk mengaktifkan bean validation.
+    severity: WARNING
+    languages: [java]
+    metadata:
+      cwe: "CWE-20"
+      owasp: "A03:2021 - Injection"
